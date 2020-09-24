@@ -14,6 +14,8 @@
 namespace Ebizmarts\MailChimp\Cron;
 
 
+use Magento\Newsletter\Model\Subscriber;
+
 class Webhook
 {
     const ACTION_DELETE         = 'delete';
@@ -140,8 +142,8 @@ class Webhook
          */
         if ($subscribers->count()) {
             foreach ($subscribers as $sub) {
-                if ($sub->getSubscriberStatus() != \Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED) {
-                    $sub->setSubscriberStatus(\Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED);
+                if ($sub->getSubscriberStatus() != Subscriber::STATUS_SUBSCRIBED) {
+                    $sub->setSubscriberStatus(Subscriber::STATUS_SUBSCRIBED);
                     $sub->getResource()->save($sub);
                 }
             }
@@ -152,12 +154,12 @@ class Webhook
                     $sub = $this->_subscriberFactory->create();
                     $sub->setStoreId($storeId);
                     $sub->setSubscriberEmail($email);
-                    $this->_subscribeMember($sub, \Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED);
+                    $this->_subscribeMember($sub, Subscriber::STATUS_SUBSCRIBED);
                 }
             } else {
                 $sub = $this->_subscriberFactory->create();
                 $sub->setSubscriberEmail($email);
-                $this->_subscribeMember($sub, \Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED);
+                $this->_subscribeMember($sub, Subscriber::STATUS_SUBSCRIBED);
             }
         }
     }
@@ -176,13 +178,13 @@ class Webhook
                     case self::ACTION_DELETE:
                         if ($this->_helper->getConfigValue(\Ebizmarts\MailChimp\Helper\Data::XML_PATH_WEBHOOK_DELETE)) {
                             $sub->getResource()->delete($sub);
-                        } elseif ($sub->getSubscriberStatus()!=\Magento\Newsletter\Model\Subscriber::STATUS_UNSUBSCRIBED) {
-                            $this->_subscribeMember($sub, \Magento\Newsletter\Model\Subscriber::STATUS_UNSUBSCRIBED);
+                        } elseif ($sub->getSubscriberStatus()!= Subscriber::STATUS_UNSUBSCRIBED) {
+                            $this->_subscribeMember($sub, Subscriber::STATUS_UNSUBSCRIBED);
                         }
                         break;
                     case self::ACTION_UNSUBSCRIBE:
-                        if ($sub->getSubscriberStatus()!=\Magento\Newsletter\Model\Subscriber::STATUS_UNSUBSCRIBED) {
-                            $this->_subscribeMember($sub, \Magento\Newsletter\Model\Subscriber::STATUS_UNSUBSCRIBED);
+                        if ($sub->getSubscriberStatus()!= Subscriber::STATUS_UNSUBSCRIBED) {
+                            $this->_subscribeMember($sub, Subscriber::STATUS_UNSUBSCRIBED);
                         }
                         break;
                 }
@@ -220,7 +222,7 @@ class Webhook
             } else {
                 $sub = $this->_subscriberFactory->create();
                 $sub->setSubscriberEmail($newEmail);
-                $this->_subscribeMember($sub, \Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED);
+                $this->_subscribeMember($sub, Subscriber::STATUS_SUBSCRIBED);
             }
         }
     }
@@ -253,9 +255,9 @@ class Webhook
                         $member = $api->lists->members->get($listId, hash('md5', strtolower($email)));
                         if ($member) {
                             if ($member['status'] == \Mailchimp::SUBSCRIBED) {
-                                $this->_subscribeMember($subscriber, \Magento\Newsletter\Model\Subscriber::STATUS_SUBSCRIBED);
+                                $this->_subscribeMember($subscriber, Subscriber::STATUS_SUBSCRIBED);
                             } elseif ($member['status'] == \Mailchimp::UNSUBSCRIBED) {
-                                $this->_subscribeMember($subscriber, \Magento\Newsletter\Model\Subscriber::STATUS_UNSUBSCRIBED);
+                                $this->_subscribeMember($subscriber, Subscriber::STATUS_UNSUBSCRIBED);
                             }
                         }
                     } catch (\Mailchimp_Error $e) {
@@ -295,8 +297,27 @@ class Webhook
                         $interestGroup->getResource()->save($interestGroup);
                         $listId = $this->_helper->getGeneralList($subscriber->getStoreId());
                     } else {
-                        $this->_subscriberFactory->create()->subscribe($customer->getEmail());
-                        $subscriber->loadByEmail($customer->getEmail());
+						$storeId = $customer->getStoreId();
+						$email = $customer->getEmail();
+
+						$subscriber = $this->_subscriberFactory->create();
+						$subscriber->setSubscriberEmail($email);
+						$subscriber->setStoreId($storeId);
+
+						try {
+							$api = $this->_helper->getApi($storeId);
+							$member = $api->lists->members->get($data['list_id'], hash('md5', strtolower($email)));
+							if ($member) {
+								if ($member['status'] == \Mailchimp::SUBSCRIBED) {
+									$this->_subscribeMember($subscriber, Subscriber::STATUS_SUBSCRIBED);
+								} elseif ($member['status'] == \Mailchimp::UNSUBSCRIBED) {
+									$this->_subscribeMember($subscriber, Subscriber::STATUS_UNSUBSCRIBED);
+								}
+							}
+						} catch (\Mailchimp_Error $e) {
+							$this->_helper->log($e->getFriendlyMessage());
+						}
+
                         $interestGroup->getBySubscriberIdStoreId($subscriber->getSubscriberId(), $subscriber->getStoreId());
                         $interestGroup->setGroupdata($serializedGroups);
                         $interestGroup->setSubscriberId($subscriber->getSubscriberId());
@@ -332,7 +353,7 @@ class Webhook
      * @param string $status
      * @throws \Exception
      */
-    protected function _subscribeMember(\Magento\Newsletter\Model\Subscriber $subscriber, int $status)
+    protected function _subscribeMember(Subscriber $subscriber, int $status)
     {
         $subscriber->setImportMode(true);
         $subscriber->setStatus($status);

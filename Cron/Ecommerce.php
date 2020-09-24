@@ -124,6 +124,7 @@ class Ecommerce
             $tableName,
             'batch_id is null and mailchimp_sync_modified != 1 and mailchimp_sync_error is null'
         );
+        $defaultStoreId = $this->_storeManager->getStore()->getId();
 
         foreach ($this->_storeManager->getStores() as $storeId => $val) {
             if ($this->_helper->getConfigValue(\Ebizmarts\MailChimp\Helper\Data::XML_PATH_ACTIVE, $storeId)) {
@@ -162,7 +163,10 @@ class Ecommerce
                 }
             }
         }
+
+        $this->_storeManager->setCurrentStore($defaultStoreId);
         $syncs = [];
+
         foreach ($this->_storeManager->getStores() as $storeId => $val) {
             $mailchimpStoreId = $this->_helper->getConfigValue(
                 \Ebizmarts\MailChimp\Helper\Data::XML_MAILCHIMP_STORE,
